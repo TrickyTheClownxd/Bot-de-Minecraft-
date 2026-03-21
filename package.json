@@ -1,7 +1,7 @@
 {
-  "name": "bot-minecraft-pro-2026",
-  "version": "1.1.0",
-  "description": "Bot inteligente adaptable para Minecraft",
+  "name": "mc-bot-evolutivo-2026",
+  "version": "1.2.0",
+  "description": "Bot inteligente adaptable con memoria y soporte para mods de terror",
   "main": "index.js",
   "dependencies": {
     "mineflayer": "^4.20.0",
