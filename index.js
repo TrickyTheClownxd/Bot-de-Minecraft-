@@ -19,7 +19,7 @@ let memoriaColectiva = "Eres un bot avanzado de Minecraft. Te adaptas a cualquie
 const bot = mineflayer.createBot({
     host: process.env.MC_HOST,
     port: parseInt(process.env.MC_PORT) || 25565,
-    username: 'Tricky_Bot', 
+    username: 'comeconchass_Bot', 
     auth: 'offline',
     version: '1.21'
 });
