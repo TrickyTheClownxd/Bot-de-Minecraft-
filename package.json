@@ -1,7 +1,7 @@
 {
   "name": "mc-bot-universal-ia",
   "version": "1.5.0",
-  "description": "Bot híbrido Java/Bedrock",
+  "description": "Bot híbrido Java/Bedrock Offline",
   "main": "index.js",
   "dependencies": {
     "mineflayer": "latest",
