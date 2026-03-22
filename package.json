@@ -1,14 +1,12 @@
 {
-  "name": "bot-ia-final",
+  "name": "bot-minecraft-mongo",
   "version": "1.0.0",
   "main": "index.js",
   "dependencies": {
     "mineflayer": "latest",
-    "mineflayer-pathfinder": "latest",
-    "@miner-org/mineflayer-baritone": "latest",
-    "minecraft-data": "latest",
+    "mongoose": "latest",
     "@google/generative-ai": "latest",
-    "express": "^4.18.2"
+    "express": "latest"
   },
   "scripts": {
     "start": "node index.js"
