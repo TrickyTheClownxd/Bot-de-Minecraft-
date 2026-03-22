@@ -5,7 +5,7 @@ const { pathfinder, Movements, goals } = require('mineflayer-pathfinder');
 
 // --- SERVIDOR PARA RENDER ---
 const app = express();
-app.get('/', (req, res) => res.send('IA MC Activa - Esperando Login'));
+app.get('/', (req, res) => res.send('Bot Minecraft Offline - Estado: Activo'));
 app.listen(process.env.PORT || 3000);
 
 const isBedrock = process.env.MC_TYPE === 'bedrock';
@@ -15,30 +15,30 @@ if (isBedrock) {
     const bot = bedrock.createClient({
         host: process.env.MC_HOST,
         port: parseInt(process.env.MC_PORT) || 19132,
-        username: process.env.MC_USER,
-        offline: false
+        username: process.env.MC_USER || 'Bot_Bostero',
+        offline: true // Modo cracked para Bedrock
     });
-    bot.on('join', () => console.log('¡Bot en Bedrock!'));
+    bot.on('join', () => console.log('¡Bot en Bedrock conectado!'));
 } else {
-    console.log("Iniciando en modo JAVA...");
+    console.log("Iniciando en modo JAVA (Offline)...");
     const bot = mineflayer.createBot({
         host: process.env.MC_HOST,
         port: parseInt(process.env.MC_PORT) || 25565,
-        username: process.env.MC_USER,
-        auth: 'microsoft',
+        username: 'Tricky_Bot', // Puedes cambiar este nombre por el que quieras
+        auth: 'offline', // <--- AQUÍ ESTÁ EL TRUCO: Ya no pide cuenta Microsoft
         version: '1.21'
     });
 
     bot.loadPlugin(pathfinder);
 
     bot.on('spawn', () => {
-        bot.chat("IA conectada. Baritone desactivado temporalmente.");
-        console.log("¡Bot listo! Mira los logs para el código de Microsoft.");
+        bot.chat("¡IA Conectada en modo Offline! Listo para la acción.");
+        console.log("¡Bot dentro del servidor! Ya no necesitas códigos.");
     });
 
-    // Defensa básica
+    // Defensa básica contra mobs
     bot.on('entityUpdate', (entity) => {
-        if (entity.type === 'mob' && entity.kind === 'Hostile monsters') {
+        if (entity.type === 'mob' && (entity.kind === 'Hostile monsters' || entity.metadata[16] === true)) {
             const dist = bot.entity.position.distanceTo(entity.position);
             if (dist < 8) {
                 const mcData = require('minecraft-data')(bot.version);
@@ -49,9 +49,11 @@ if (isBedrock) {
         }
     });
 
+    // Comandos simples
     bot.on('chat', (username, message) => {
         if (username === bot.username) return;
-        if (message.toLowerCase().includes('ven')) {
+        const msg = message.toLowerCase();
+        if (msg.includes('ven')) {
             const target = bot.players[username]?.entity;
             if (target) {
                 const mcData = require('minecraft-data')(bot.version);
@@ -59,13 +61,15 @@ if (isBedrock) {
                 bot.pathfinder.setGoal(new goals.GoalFollow(target, 2), true);
             }
         }
-        if (message.toLowerCase().includes('para')) bot.pathfinder.setGoal(null);
+        if (msg.includes('para')) bot.pathfinder.setGoal(null);
     });
 
+    // Anti-AFK
     setInterval(() => {
         bot.setControlState('jump', true);
         setTimeout(() => bot.setControlState('jump', false), 500);
     }, 45000);
 
-    bot.on('error', (err) => console.log('Error:', err));
+    bot.on('error', (err) => console.log('Error de conexión:', err.message));
+    bot.on('kicked', (reason) => console.log('Bot expulsado:', reason));
 }
