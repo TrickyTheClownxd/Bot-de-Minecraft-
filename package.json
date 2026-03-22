@@ -1,16 +1,20 @@
 {
-  "name": "mc-bot-evolutivo-2026",
-  "version": "1.2.0",
-  "description": "Bot inteligente adaptable con memoria y soporte para mods de terror",
+  "name": "mc-bot-universal-ia",
+  "version": "1.5.0",
+  "description": "Bot híbrido Java/Bedrock con capacidades de combate y minería",
   "main": "index.js",
   "dependencies": {
     "mineflayer": "^4.20.0",
     "mineflayer-pathfinder": "^2.5.0",
     "mineflayer-baritone": "^0.1.0",
     "minecraft-data": "^3.57.0",
+    "bedrock-protocol": "^3.28.1",
     "express": "^4.18.2"
   },
   "scripts": {
     "start": "node index.js"
+  },
+  "engines": {
+    "node": ">=18.x"
   }
 }
