@@ -1,76 +1,79 @@
 const mineflayer = require('mineflayer');
-const bedrock = require('bedrock-protocol');
-const express = require('express');
 const { pathfinder, Movements, goals } = require('mineflayer-pathfinder');
-const baritone = require('mineflayer-baritone'); // <--- BARITONE ACTIVADO
+const baritone = require('mineflayer-baritone');
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+const express = require('express');
 
-// --- SERVIDOR PARA RENDER ---
+// --- SERVIDOR WEB (Para Render) ---
 const app = express();
-app.get('/', (res) => res.send('Bot con Baritone - Estado: Activo'));
+app.get('/', (req, res) => res.send('Bot IA Multimapa - Online'));
 app.listen(process.env.PORT || 3000);
 
-const isBedrock = process.env.MC_TYPE === 'bedrock';
+// --- CONFIGURACIÓN IA ---
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-if (isBedrock) {
-    console.log("Modo BEDROCK...");
-    const bot = bedrock.createClient({
-        host: process.env.MC_HOST,
-        port: parseInt(process.env.MC_PORT) || 19132,
-        username: 'Tu_Nombre_Bedrock', // <--- CAMBIA EL NOMBRE AQUÍ (Bedrock)
-        offline: true
-    });
-} else {
-    console.log("Modo JAVA con Baritone...");
-    const bot = mineflayer.createBot({
-        host: process.env.MC_HOST,
-        port: parseInt(process.env.MC_PORT) || 25565,
-        username: 'comeconchas_bot', // <--- CAMBIA EL NOMBRE AQUÍ (Java)
-        auth: 'offline',
-        version: '1.21'
-    });
+let memoriaColectiva = "Eres un bot avanzado de Minecraft. Te adaptas a cualquier mapa (One Block, Survival, Skyblock). Puedes usar Baritone para minar. Eres amigable y aprendes de los jugadores.";
 
-    bot.loadPlugin(pathfinder);
-    bot.loadPlugin(baritone); // Carga el plugin de minado
+// --- CREACIÓN DEL BOT ---
+const bot = mineflayer.createBot({
+    host: process.env.MC_HOST,
+    port: parseInt(process.env.MC_PORT) || 25565,
+    username: 'comeconchas_Bot', // <--- CAMBIA EL NOMBRE AQUÍ
+    auth: 'offline',
+    version: '1.21'
+});
 
-    bot.on('spawn', () => {
-        bot.chat("¡IA con Baritone conectada! Di 'mina' + bloque para empezar.");
-    });
+bot.loadPlugin(pathfinder);
+bot.loadPlugin(baritone);
 
-    // --- COMANDOS DE CHAT ---
-    bot.on('chat', (username, message) => {
-        if (username === bot.username) return;
-        const msg = message.toLowerCase();
+bot.on('spawn', () => {
+    console.log("¡Bot en el servidor!");
+    bot.chat("He llegado. Enseñame sobre este mundo y lo recordaré.");
+});
 
-        // Comando para seguirte: "ven"
-        if (msg.includes('ven')) {
-            const target = bot.players[username]?.entity;
-            if (target) {
-                const mcData = require('minecraft-data')(bot.version);
-                bot.pathfinder.setMovements(new Movements(bot, mcData));
-                bot.pathfinder.setGoal(new goals.GoalFollow(target, 2), true);
-            }
-        }
+// --- SISTEMA DE APRENDIZAJE Y ACCIÓN ---
+bot.on('chat', async (username, message) => {
+    if (username === bot.username) return;
 
-        // Comando para minar: "mina [bloque]" (ej: mina iron_ore)
-        if (msg.includes('mina')) {
-            const blockName = msg.split(' ')[1] || 'diamond_ore';
-            bot.chat(`Buscando ${blockName}...`);
-            bot.baritone.mine(blockName);
-        }
+    const msg = message.toLowerCase();
 
-        // Comando para parar todo: "stop"
-        if (msg.includes('stop')) {
-            bot.baritone.stop();
-            bot.pathfinder.setGoal(null);
-            bot.chat("Okey, me detengo.");
-        }
-    });
+    // 1. Acciones Rápidas (Baritone)
+    if (msg.includes('mina')) {
+        const bloque = msg.split(' ')[1] || 'diamond_ore';
+        bot.chat(`Entendido, voy a minar ${bloque}.`);
+        return bot.baritone.mine(bloque);
+    }
+    
+    if (msg.includes('stop') || msg.includes('para')) {
+        bot.baritone.stop();
+        bot.pathfinder.setGoal(null);
+        return bot.chat("Deteniendo todas las acciones.");
+    }
 
-    // Anti-AFK mejorado
-    setInterval(() => {
-        bot.setControlState('jump', true);
-        setTimeout(() => bot.setControlState('jump', false), 500);
-    }, 30000);
+    // 2. Procesamiento con IA (Aprendizaje)
+    try {
+        const prompt = `Contexto: ${memoriaColectiva}\nJugador ${username} dice: ${message}\nResponde de forma épica y corta. Si te dan una instrucción de ubicación o regla del mapa, confírmalo.`;
+        
+        const result = await model.generateContent(prompt);
+        const response = await result.response;
+        const respuestaIA = response.text();
 
-    bot.on('error', (err) => console.log('Error:', err.message));
-}
+        bot.chat(respuestaIA.substring(0, 255));
+
+        // El bot "aprende" guardando el mensaje en su memoria de sesión
+        memoriaColectiva += `\nInstrucción de ${username}: ${message}`;
+        
+    } catch (err) {
+        console.log("Error en IA:", err);
+    }
+});
+
+// Anti-AFK (Salto cada 40 seg)
+setInterval(() => {
+    bot.setControlState('jump', true);
+    setTimeout(() => bot.setControlState('jump', false), 500);
+}, 40000);
+
+bot.on('error', (err) => console.log('Error del bot:', err));
+bot.on('kicked', (reason) => console.log('Bot expulsado por:', reason));
