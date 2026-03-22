@@ -1,53 +1,47 @@
 const mineflayer = require('mineflayer');
-const { pathfinder } = require('mineflayer-pathfinder');
-const baritone = require('@miner-org/mineflayer-baritone');
-const { GoogleGenerativeAI } = require("@google/generative-ai");
 const express = require('express');
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 const app = express();
-app.get('/', (req, res) => res.send('Bot Activo'));
+app.get('/', (req, res) => res.send('Esperando datos de Aternos...'));
 app.listen(process.env.PORT || 3000);
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-// --- CONFIGURACIÓN CON DATOS DE TU FOTO ---
-const bot = mineflayer.createBot({
-    host: 'abyssinian.aternos.host', // Nueva Dyn IP de tu captura
-    port: 28953,                     // Puerto de tu captura
-    username: 'comeconchass_Bot',    // El nombre épico
+const botArgs = {
+    host: process.env.MC_HOST || 'tu-server.aternos.me', // Se saca de Render
+    port: parseInt(process.env.MC_PORT) || 25565,       // Se saca de Render
+    username: 'comeconchass_Bot',
     auth: 'offline',
-    checkTimeoutInterval: 90000,     // Más tiempo para evitar el ETIMEDOUT
-    version: '1.21.1'
-});
+    version: false,
+    connectTimeout: 60000
+};
 
-// Carga de plugins
-bot.loadPlugin(pathfinder);
-try {
-    const p = baritone.baritone || baritone.plugin || baritone;
-    bot.loadPlugin(p);
-} catch (e) { console.log("Baritone en espera..."); }
+let bot;
 
-bot.on('spawn', () => {
-    console.log("¡POR FIN CONECTADO!");
-    bot.chat("Llegó el que faltaba. ¡A darle!");
-});
+function createBot() {
+    bot = mineflayer.createBot(botArgs);
 
-bot.on('chat', async (username, message) => {
-    if (username === bot.username) return;
+    bot.on('spawn', () => console.log("¡CONECTADO!"));
+    
+    bot.on('chat', async (username, message) => {
+        if (username === bot.username) return;
+        try {
+            const prompt = `Responde corto al jugador ${username}: ${message}`;
+            const result = await model.generateContent(prompt);
+            bot.chat(result.response.text().substring(0, 255));
+        } catch (e) { console.log("Error IA"); }
+    });
 
-    if (message.toLowerCase().includes('mina')) {
-        const bloque = message.split(' ')[1] || 'grass_block';
-        bot.chat(`Buscando ${bloque}, no me extrañen.`);
-        return bot.baritone.mine(bloque);
-    }
+    bot.on('error', (err) => {
+        console.log("Error de conexión:", err.message);
+    });
 
-    try {
-        const prompt = `Eres comeconchass_Bot en Minecraft. Responde corto y gracioso a: ${message}`;
-        const result = await model.generateContent(prompt);
-        bot.chat(result.response.text().substring(0, 255));
-    } catch (err) { console.log("Error IA"); }
-});
+    bot.on('end', () => {
+        console.log("Reintentando conexión en 30s...");
+        setTimeout(createBot, 30000);
+    });
+}
 
-bot.on('error', (err) => console.log("Error:", err.message));
-bot.on('end', () => console.log("Desconectado. Reintentando..."));
+createBot();
