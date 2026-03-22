@@ -1,6 +1,6 @@
 {
-  "name": "bot-ia-maestra",
-  "version": "1.1.0",
+  "name": "bot-ia-final",
+  "version": "1.0.0",
   "main": "index.js",
   "dependencies": {
     "mineflayer": "latest",
