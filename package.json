@@ -5,7 +5,7 @@
   "dependencies": {
     "mineflayer": "latest",
     "mineflayer-pathfinder": "latest",
-    "mineflayer-baritone": "^1.10.1",
+    "mineflayer-baritone": "github:link-discord/mineflayer-baritone",
     "minecraft-data": "latest",
     "@google/generative-ai": "latest",
     "express": "^4.18.2"
