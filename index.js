@@ -1,11 +1,12 @@
 const mineflayer = require('mineflayer');
+const bedrock = require('bedrock-protocol');
 const mongoose = require('mongoose');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const express = require('express');
 
-// --- CONFIGURACIÓN DE EXPRESS (Para que Render no lo apague) ---
+// --- SERVER PARA MANTENER VIVO EN RENDER ---
 const app = express();
-app.get('/', (req, res) => res.send('Bot de Minecraft con Memoria Vivo 24/7'));
+app.get('/', (req, res) => res.send('Bot Híbrido (Java/Bedrock) Activo 24/7'));
 app.listen(process.env.PORT || 10000);
 
 // --- CONFIGURACIÓN DE IA (Gemini) ---
@@ -25,67 +26,78 @@ const MemorySchema = new mongoose.Schema({
 });
 const Memory = mongoose.model('MinecraftMemory', MemorySchema);
 
-// --- CONFIGURACIÓN DEL BOT ---
-const botArgs = {
-  host: process.env.MC_HOST || '185.107.193.70', // IP Numérica directa
-  port: parseInt(process.env.MC_PORT) || 28953,
-  username: 'comeconchass_Bot',
-  auth: 'offline',
-  version: false, // Autodetectar versión para evitar bloqueos
-  checkTimeoutInterval: 120000, 
-  connectTimeout: 120000,
-  keepAlive: true
-};
+// --- VARIABLES DE ENTORNO ---
+const TYPE = (process.env.MC_TYPE || 'java').toLowerCase();
+const HOST = process.env.MC_HOST || '185.107.193.70';
+const PORT = parseInt(process.env.MC_PORT) || 28953;
+const USERNAME = 'comeconchass_Bot';
 
-let bot;
+console.log(`🚀 Iniciando en modo: ${TYPE.toUpperCase()} en ${HOST}:${PORT}`);
 
-function createBot() {
-  console.log('🚀 Iniciando intento de conexión...');
-  bot = mineflayer.createBot(botArgs);
+// --- FUNCIÓN PARA PROCESAR IA (Compartida) ---
+async function chatConIA(username, message, sendChatFunc) {
+  if (username === USERNAME) return;
+  try {
+    const prev = await Memory.find().limit(3).sort({ fecha: -1 });
+    const contexto = prev.map(m => `User: ${m.mensaje}\nBot: ${m.respuesta}`).join('\n');
 
-  bot.on('login', () => {
-    console.log('¡CONECTADO AL SERVIDOR! 🎮');
-  });
+    const prompt = `Eres un bot de Minecraft sarcástico y divertido en un server One Block. 
+    Contexto previo:\n${contexto}\n
+    ${username} dice: ${message}\nResponde corto:`;
 
-  bot.on('chat', async (username, message) => {
-    if (username === bot.username) return;
+    const result = await model.generateContent(prompt);
+    const responseText = result.response.text();
 
-    try {
-      // Leer últimos recuerdos
-      const prev = await Memory.find().limit(3).sort({ fecha: -1 });
-      const contexto = prev.map(m => `User: ${m.mensaje}\nBot: ${m.respuesta}`).join('\n');
-
-      const prompt = `Eres un bot de Minecraft sarcástico y divertido en un server One Block. 
-      Contexto previo:\n${contexto}\n
-      ${username} dice: ${message}\nResponde corto:`;
-
-      const result = await model.generateContent(prompt);
-      const responseText = result.response.text();
-
-      // Guardar en la nube
-      await new Memory({ usuario: username, mensaje: message, respuesta: responseText }).save();
-
-      bot.chat(responseText);
-    } catch (err) {
-      console.error('Error IA:', err);
-    }
-  });
-
-  // Anti-AFK simple (Salto cada 40s)
-  setInterval(() => {
-    if (bot.entity) bot.setControlState('jump', true);
-    setTimeout(() => { if (bot.entity) bot.setControlState('jump', false); }, 500);
-  }, 40000);
-
-  // Manejo de errores y reconexión
-  bot.on('error', (err) => {
-    console.log(`Error de conexión: ${err.message}`);
-  });
-
-  bot.on('end', () => {
-    console.log('Desconectado. Reintentando en 60 segundos...');
-    setTimeout(createBot, 60000);
-  });
+    await new Memory({ usuario: username, mensaje: message, respuesta: responseText }).save();
+    sendChatFunc(responseText);
+  } catch (err) {
+    console.error('Error en la IA:', err);
+  }
 }
 
-createBot();
+// --- LÓGICA DE CONEXIÓN ---
+if (TYPE === 'java') {
+  function startJava() {
+    const bot = mineflayer.createBot({
+      host: HOST,
+      port: PORT,
+      username: USERNAME,
+      auth: 'offline',
+      version: false
+    });
+
+    bot.on('login', () => console.log('✅ Java: ¡CONECTADO!'));
+    bot.on('chat', (username, message) => chatConIA(username, message, (txt) => bot.chat(txt)));
+    bot.on('error', (err) => console.log('❌ Error Java:', err.message));
+    bot.on('end', () => setTimeout(startJava, 30000));
+  }
+  startJava();
+
+} else {
+  function startBedrock() {
+    const client = bedrock.createClient({
+      host: HOST,
+      port: PORT,
+      username: USERNAME,
+      offline: true,
+      version: '1.21.1' // Ajusta si el server usa otra versión de Bedrock
+    });
+
+    client.on('join', () => console.log('✅ Bedrock: ¡CONECTADO!'));
+    
+    // El chat en Bedrock viene en el paquete 'text'
+    client.on('text', (packet) => {
+      if (packet.source_name === USERNAME) return;
+      chatConIA(packet.source_name, packet.message, (txt) => {
+        client.queue('text', {
+          type: 'chat', needs_translation: false, source_name: USERNAME, 
+          xuid: '', platform_chat_id: '', message: txt
+        });
+      });
+    });
+
+    client.on('error', (err) => console.log('❌ Error Bedrock:', err.message));
+    client.on('close', () => setTimeout(startBedrock, 30000));
+  }
+  startBedrock();
+}
