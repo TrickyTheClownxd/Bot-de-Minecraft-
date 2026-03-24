@@ -4,111 +4,82 @@ const mongoose = require('mongoose');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const express = require('express');
 
-// --- SERVER PARA MANTENER VIVO EN RENDER ---
+// --- SERVER EXPRESS PARA EVITAR QUE RENDER SE DUERMA ---
 const app = express();
-app.get('/', (req, res) => res.send('Bot Híbrido Dylan/Raids Activo 24/7'));
+app.get('/', (req, res) => res.send('Bot Híbrido Multiversión Activo'));
 app.listen(process.env.PORT || 10000);
 
-// --- CONFIGURACIÓN DE IA (Gemini) ---
+// --- IA Y BASE DE DATOS ---
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-// --- CONEXIÓN A MONGODB ---
 mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log('✅ Conectado a MongoDB Atlas'))
+  .then(() => console.log('✅ MongoDB Conectado'))
   .catch(err => console.error('❌ Error Mongo:', err));
 
-const MemorySchema = new mongoose.Schema({
+const Memory = mongoose.model('MinecraftMemory', new mongoose.Schema({
   usuario: String,
   mensaje: String,
   respuesta: String,
   fecha: { type: Date, default: Date.now }
-});
-const Memory = mongoose.model('MinecraftMemory', MemorySchema);
+}));
 
-// --- VARIABLES DE ENTORNO ---
+// --- VARIABLES DE CONFIGURACIÓN ---
 const TYPE = (process.env.MC_TYPE || 'java').toLowerCase();
 const HOST = process.env.MC_HOST;
 const PORT = parseInt(process.env.MC_PORT);
 const USERNAME = 'comeconchass_Bot';
 
-console.log(`🚀 Iniciando en modo: ${TYPE.toUpperCase()} en ${HOST}:${PORT}`);
-
-// --- FUNCIÓN PARA PROCESAR IA (Compartida) ---
-async function chatConIA(username, message, sendChatFunc) {
+// --- FUNCIÓN CEREBRO (IA) ---
+async function procesarMensaje(username, message, responder) {
   if (!username || username === USERNAME || !message) return;
   try {
     const prev = await Memory.find().limit(3).sort({ fecha: -1 });
     const contexto = prev.map(m => `User: ${m.mensaje}\nBot: ${m.respuesta}`).join('\n');
 
-    const prompt = `Eres un bot de Minecraft sarcástico y divertido. 
-    Contexto previo:\n${contexto}\n
-    ${username} dice: ${message}\nResponde corto y en español:`;
-
+    const prompt = `Eres un bot de Minecraft sarcástico. Contexto:\n${contexto}\n${username}: ${message}\nResponde corto:`;
     const result = await model.generateContent(prompt);
-    const responseText = result.response.text();
+    const texto = result.response.text();
 
-    await new Memory({ usuario: username, mensaje: message, respuesta: responseText }).save();
-    sendChatFunc(responseText);
-  } catch (err) {
-    console.error('Error en la IA:', err);
-  }
+    await new Memory({ usuario: username, mensaje: message, respuesta: texto }).save();
+    responder(texto);
+  } catch (e) { console.error('Error IA:', e); }
 }
 
 // --- LÓGICA DE CONEXIÓN ---
 if (TYPE === 'java') {
-  function startJava() {
-    console.log('Intentando conectar a Java...');
+  function conectarJava() {
+    console.log(`🎮 Iniciando modo JAVA en ${HOST}:${PORT}`);
     const bot = mineflayer.createBot({
-      host: HOST,
-      port: PORT,
-      username: USERNAME,
-      auth: 'offline',
-      version: false,
-      connectTimeout: 60000
+      host: HOST, port: PORT, username: USERNAME, auth: 'offline', version: false
     });
 
-    bot.on('login', () => console.log('✅ Java: ¡CONECTADO!'));
-    bot.on('chat', (username, message) => chatConIA(username, message, (txt) => bot.chat(txt)));
-    bot.on('error', (err) => console.log('❌ Error Java:', err.message));
-    bot.on('end', () => {
-      console.log('Conexión Java finalizada. Reintentando...');
-      setTimeout(startJava, 30000);
-    });
+    bot.on('chat', (user, msg) => procesarMensaje(user, msg, (t) => bot.chat(t)));
+    bot.on('error', (e) => console.log('Err Java:', e.message));
+    bot.on('end', () => setTimeout(conectarJava, 30000));
   }
-  startJava();
+  conectarJava();
 
 } else {
-  function startBedrock() {
-    console.log('Intentando conectar a Bedrock...');
+  function conectarBedrock() {
+    console.log(`📱 Iniciando modo BEDROCK en ${HOST}:${PORT}`);
     const client = bedrock.createClient({
-      host: HOST,
-      port: PORT,
-      username: USERNAME,
-      offline: true,
-      // Usamos la versión de tu captura (1.21.31 aprox, el protocolo lo autodetecta mejor así)
-      version: '1.21.30' 
+      host: HOST, port: PORT, username: USERNAME, offline: true, version: '1.21.30'
     });
 
-    client.on('join', () => console.log('✅ Bedrock: ¡CONECTADO!'));
-    
     client.on('text', (packet) => {
-      // En Bedrock el chat viene con diferentes tipos, 'chat' es el estándar
       if (packet.type === 'chat' && packet.source_name !== USERNAME) {
-        chatConIA(packet.source_name, packet.message, (txt) => {
+        procesarMensaje(packet.source_name, packet.message, (t) => {
           client.queue('text', {
-            type: 'chat', needs_translation: false, source_name: USERNAME, 
-            xuid: '', platform_chat_id: '', message: txt
+            type: 'chat', needs_translation: false, source_name: USERNAME,
+            xuid: '', platform_chat_id: '', message: t
           });
         });
       }
     });
 
-    client.on('error', (err) => console.log('❌ Error Bedrock:', err.message));
-    client.on('close', () => {
-      console.log('Conexión Bedrock cerrada. Reintentando...');
-      setTimeout(startBedrock, 30000);
-    });
+    client.on('error', (e) => console.log('Err Bedrock:', e.message));
+    client.on('close', () => setTimeout(conectarBedrock, 30000));
   }
-  startBedrock();
+  conectarBedrock();
 }
