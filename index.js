@@ -6,7 +6,7 @@ const express = require('express');
 
 // --- SERVER PARA MANTENER VIVO EN RENDER ---
 const app = express();
-app.get('/', (req, res) => res.send('Bot Híbrido (Java/Bedrock) Activo 24/7'));
+app.get('/', (req, res) => res.send('Bot Híbrido Dylan/Raids Activo 24/7'));
 app.listen(process.env.PORT || 10000);
 
 // --- CONFIGURACIÓN DE IA (Gemini) ---
@@ -28,22 +28,22 @@ const Memory = mongoose.model('MinecraftMemory', MemorySchema);
 
 // --- VARIABLES DE ENTORNO ---
 const TYPE = (process.env.MC_TYPE || 'java').toLowerCase();
-const HOST = process.env.MC_HOST || '185.107.193.70';
-const PORT = parseInt(process.env.MC_PORT) || 28953;
+const HOST = process.env.MC_HOST;
+const PORT = parseInt(process.env.MC_PORT);
 const USERNAME = 'comeconchass_Bot';
 
 console.log(`🚀 Iniciando en modo: ${TYPE.toUpperCase()} en ${HOST}:${PORT}`);
 
 // --- FUNCIÓN PARA PROCESAR IA (Compartida) ---
 async function chatConIA(username, message, sendChatFunc) {
-  if (username === USERNAME) return;
+  if (!username || username === USERNAME || !message) return;
   try {
     const prev = await Memory.find().limit(3).sort({ fecha: -1 });
     const contexto = prev.map(m => `User: ${m.mensaje}\nBot: ${m.respuesta}`).join('\n');
 
-    const prompt = `Eres un bot de Minecraft sarcástico y divertido en un server One Block. 
+    const prompt = `Eres un bot de Minecraft sarcástico y divertido. 
     Contexto previo:\n${contexto}\n
-    ${username} dice: ${message}\nResponde corto:`;
+    ${username} dice: ${message}\nResponde corto y en español:`;
 
     const result = await model.generateContent(prompt);
     const responseText = result.response.text();
@@ -58,46 +58,57 @@ async function chatConIA(username, message, sendChatFunc) {
 // --- LÓGICA DE CONEXIÓN ---
 if (TYPE === 'java') {
   function startJava() {
+    console.log('Intentando conectar a Java...');
     const bot = mineflayer.createBot({
       host: HOST,
       port: PORT,
       username: USERNAME,
       auth: 'offline',
-      version: false
+      version: false,
+      connectTimeout: 60000
     });
 
     bot.on('login', () => console.log('✅ Java: ¡CONECTADO!'));
     bot.on('chat', (username, message) => chatConIA(username, message, (txt) => bot.chat(txt)));
     bot.on('error', (err) => console.log('❌ Error Java:', err.message));
-    bot.on('end', () => setTimeout(startJava, 30000));
+    bot.on('end', () => {
+      console.log('Conexión Java finalizada. Reintentando...');
+      setTimeout(startJava, 30000);
+    });
   }
   startJava();
 
 } else {
   function startBedrock() {
+    console.log('Intentando conectar a Bedrock...');
     const client = bedrock.createClient({
       host: HOST,
       port: PORT,
       username: USERNAME,
       offline: true,
-      version: '1.21.1' // Ajusta si el server usa otra versión de Bedrock
+      // Usamos la versión de tu captura (1.21.31 aprox, el protocolo lo autodetecta mejor así)
+      version: '1.21.30' 
     });
 
     client.on('join', () => console.log('✅ Bedrock: ¡CONECTADO!'));
     
-    // El chat en Bedrock viene en el paquete 'text'
     client.on('text', (packet) => {
-      if (packet.source_name === USERNAME) return;
-      chatConIA(packet.source_name, packet.message, (txt) => {
-        client.queue('text', {
-          type: 'chat', needs_translation: false, source_name: USERNAME, 
-          xuid: '', platform_chat_id: '', message: txt
+      // En Bedrock el chat viene con diferentes tipos, 'chat' es el estándar
+      if (packet.type === 'chat' && packet.source_name !== USERNAME) {
+        chatConIA(packet.source_name, packet.message, (txt) => {
+          client.queue('text', {
+            type: 'chat', needs_translation: false, source_name: USERNAME, 
+            xuid: '', platform_chat_id: '', message: txt
+          });
         });
-      });
+      }
     });
 
     client.on('error', (err) => console.log('❌ Error Bedrock:', err.message));
-    client.on('close', () => setTimeout(startBedrock, 30000));
+    client.on('close', () => {
+      console.log('Conexión Bedrock cerrada. Reintentando...');
+      setTimeout(startBedrock, 30000);
+    });
   }
   startBedrock();
 }
